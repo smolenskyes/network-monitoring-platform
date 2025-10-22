@@ -1,0 +1,164 @@
+services:
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - AUTH_SERVICE_URL=auth-service:8000
+      - DISCOVERY_SERVICE_URL=discovery-service:8001
+      - MONITORING_SERVICE_URL=monitoring-service:8002
+    depends_on:
+      - auth-service
+      - discovery-service
+      - monitoring-service
+    networks:
+      - monitoring-network
+
+  # Auth Service
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://auth_user:auth_pass@auth-db:5432/auth_db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_MINUTES=30
+    depends_on:
+      - auth-db
+    networks:
+      - monitoring-network
+
+  # Discovery Service
+  discovery-service:
+    build: ./discovery-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://discovery_user:discovery_pass@discovery-db:5432/discovery_db
+      - REDIS_URL=redis://redis:6379/0
+      - NETWORK_SCAN_INTERVAL=300
+    depends_on:
+      - discovery-db
+      - redis
+    networks:
+      - monitoring-network
+
+  # Monitoring Service
+  monitoring-service:
+    build: ./monitoring-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://monitoring_user:monitoring_pass@monitoring-db:5432/monitoring_db
+      - REDIS_URL=redis://redis:6379/1
+      - SNMP_COMMUNITY=public
+      - MONITORING_INTERVAL=60
+    depends_on:
+      - monitoring-db
+      - redis
+    networks:
+      - monitoring-network
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - monitoring-network
+
+  # Databases
+  auth-db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=auth_db
+      - POSTGRES_USER=auth_user
+      - POSTGRES_PASSWORD=auth_pass
+    volumes:
+      - auth_data:/var/lib/postgresql/data
+      - ./databases/init-scripts/auth-init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - monitoring-network
+
+  discovery-db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=discovery_db
+      - POSTGRES_USER=discovery_user
+      - POSTGRES_PASSWORD=discovery_pass
+    volumes:
+      - discovery_data:/var/lib/postgresql/data
+    networks:
+      - monitoring-network
+
+  monitoring-db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=monitoring_db
+      - POSTGRES_USER=monitoring_user
+      - POSTGRES_PASSWORD=monitoring_pass
+    volumes:
+      - monitoring_data:/var/lib/postgresql/data
+    networks:
+      - monitoring-network
+
+  # Redis
+  redis:
+    image: redis:6-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - monitoring-network
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitoring-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring-network
+
+volumes:
+  auth_data:
+  discovery_data:
+  monitoring_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  monitoring-network:
+    driver: bridge
