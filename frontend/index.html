@@ -1,10 +1,135 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Network Monitoring</title>
-</head>
-<body>
-    <h1>Network Monitoring Platform</h1>
-    <p>Backend services are starting...</p>
-</body>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Панель мониторинга ЛВС</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Панель мониторинга ЛВС предприятия</h1>
+      <p class="subtitle">
+        Интерфейс подключён к backend-сервисам через API Gateway и отображает данные об устройствах сети.
+      </p>
+    </header>
+
+    <main class="app-grid">
+      <section class="card" id="auth-card">
+        <h2>Аутентификация</h2>
+        <p class="card-desc">
+          Введите учётные данные оператора. Токен будет использован для защищённых запросов ко всем сервисам.
+        </p>
+        <form id="login-form" class="form-grid">
+          <label>
+            Логин
+            <input type="text" id="login-username" name="username" autocomplete="username" required />
+          </label>
+          <label>
+            Пароль
+            <input type="password" id="login-password" name="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Войти</button>
+          <button type="button" id="logout-button" class="secondary" hidden>Выйти</button>
+        </form>
+        <p id="auth-status" class="status-text"></p>
+      </section>
+
+      <section class="card" id="devices-card">
+        <div class="card-header">
+          <h2>Обнаруженные устройства</h2>
+          <button type="button" id="refresh-devices">Обновить</button>
+        </div>
+        <p class="card-desc">
+          Список устройств поступает из сервиса обнаружения. Нажмите на строку для просмотра метрик.
+        </p>
+        <div class="table-wrapper">
+          <table id="devices-table">
+            <thead>
+              <tr>
+                <th>IP-адрес</th>
+                <th>Имя</th>
+                <th>Производитель</th>
+                <th>Тип</th>
+                <th>Последний опрос</th>
+              </tr>
+            </thead>
+            <tbody id="devices-table-body">
+              <tr>
+                <td colspan="5" class="empty">Нет данных. Выполните обновление.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <form id="create-device-form" class="form-grid">
+          <h3>Добавить устройство вручную</h3>
+          <label>
+            IP-адрес
+            <input type="text" name="ip_address" placeholder="192.168.0.10" required />
+          </label>
+          <label>
+            MAC-адрес
+            <input type="text" name="mac_address" placeholder="AA:BB:CC:DD:EE:FF" />
+          </label>
+          <label>
+            Имя хоста
+            <input type="text" name="hostname" placeholder="core-switch" />
+          </label>
+          <label>
+            Производитель
+            <input type="text" name="vendor" placeholder="Cisco" />
+          </label>
+          <label>
+            Тип устройства
+            <input type="text" name="device_type" placeholder="Switch" />
+          </label>
+          <button type="submit">Добавить</button>
+          <p id="create-device-status" class="status-text"></p>
+        </form>
+      </section>
+
+      <section class="card" id="device-details" hidden>
+        <div class="card-header">
+          <h2 id="device-details-title">Детали устройства</h2>
+          <button type="button" id="check-now">Запустить опрос</button>
+        </div>
+        <div class="details-grid">
+          <article>
+            <h3>Текущее состояние</h3>
+            <dl id="status-details" class="definition-list"></dl>
+          </article>
+          <article>
+            <h3>Последние метрики</h3>
+            <ul id="metrics-list" class="metrics-list"></ul>
+          </article>
+          <article>
+            <h3>Интерфейсы</h3>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Имя</th>
+                    <th>Адм. статус</th>
+                    <th>Опер. статус</th>
+                    <th>Загрузка</th>
+                    <th>Ошибки</th>
+                    <th>Время</th>
+                  </tr>
+                </thead>
+                <tbody id="interfaces-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+        <p id="details-status" class="status-text"></p>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      &copy; <span id="current-year"></span> Система мониторинга ЛВС предприятия
+    </footer>
+
+    <script src="/app.js" type="module"></script>
+  </body>
 </html>
