@@ -1,105 +1,166 @@
-diff --git a/README.md b/README.md
-index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..4e8f8efa88ec6a9ae630ab68c4060000a9912238 100644
---- a/README.md
-+++ b/README.md
-@@ -0,0 +1,101 @@
-+# Network Monitoring Platform
-+
-+Веб-платформа для мониторинга локальной вычислительной сети предприятия, построенная по микросервисной архитектуре. Репозиторий содержит готовый скелет проекта, объединяющий независимые сервисы, API-шлюз и клиентскую веб-панель. Достаточно запустить `docker compose` и сервисы поднимутся вместе со связанными базами данных и инструментами наблюдения.
-+
-+## Архитектура
-+
-+```
-+┌──────────┐       ┌────────────┐      ┌────────────────┐
-+│ Frontend │◄──────┤ API Gateway├─────►│ Backend сервисы│
-+└────┬─────┘       └────┬───────┘      └────┬────────────┘
-+     │                  │                  │
-+     │                  │                  │
-+     │       ┌──────────▼──────────┐  ┌────▼──────────┐  ┌──────────────┐
-+     │       │Auth Service         │  │Discovery      │  │Monitoring     │
-+     │       │(FastAPI + PostgreSQL│  │Service        │  │Service        │
-+     │       └─────────────────────┘  │(FastAPI +     │  │(FastAPI +     │
-+     │                                │PostgreSQL +   │  │PostgreSQL +   │
-+     │                                │Celery + Redis)│  │Celery + Redis)│
-+     │                                └─────┬─────────┘  └──────┬───────┘
-+     │                                      │                   │
-+     │                                ┌──────▼─────┐      ┌──────▼─────┐
-+     │                                │ Redis      │      │ Prometheus │
-+     │                                └────────────┘      │ Grafana    │
-+     │                                                    └────────────┘
-+```
-+
-+* **Frontend** — статическое SPA на чистом JavaScript. Выполняет запросы к API-шлюзу, отображает статус сервисов, список устройств и метрики.
-+* **API Gateway** — Nginx, маршрутизирует запросы `/api/auth`, `/api/discovery`, `/api/monitoring` к соответствующим сервисам и проксирует фронтенд.
-+* **Auth Service** — FastAPI + SQLAlchemy. Регистрация, авторизация и проверка JWT токена.
-+* **Discovery Service** — FastAPI сервис для инвентаризации сети, сохраняет устройства в PostgreSQL, фоновые задачи на Celery + Redis.
-+* **Monitoring Service** — FastAPI сервис для сбора метрик, активного опроса устройств и их интерфейсов.
-+* **Инфраструктура** — отдельные экземпляры PostgreSQL, Redis, Prometheus и Grafana.
-+
-+## Структура репозитория
-+
-+```
-+api-gateway/           # Конфигурация Nginx API-шлюза
-+auth-service/          # Код микросервиса аутентификации (FastAPI)
-+databases/             # SQL-скрипты инициализации БД
-+frontend/              # Клиентское SPA и конфиг Nginx для раздачи статики
-+monitoring-service/    # Метрики, Celery-задачи, SNMP клиент
-+discovery-service/     # Микросервис обнаружения устройств
-+prometheus/, grafana/  # Конфигурация инструментов мониторинга
-+redis/                 # Конфиг Redis сервера
-+```
-+
-+## Быстрый старт
-+
-+1. Скопируйте переменные окружения и при необходимости измените значения:
-+   ```bash
-+   cp .env.example .env
-+   ```
-+2. Запустите инфраструктуру:
-+   ```bash
-+   docker compose up -d
-+   ```
-+3. Фронтенд доступен по адресу <http://localhost:3000>, API-шлюз — <http://localhost:80>.
-+
-+> ⚠️ По умолчанию используется демонстрационный SNMP community `public`. В production-окружении замените его в `.env`.
-+
-+## Фронтенд
-+
-+Клиент теперь реализован как одностраничное приложение на React + Vite (`frontend/src`). Используются Material UI и Recharts,
-+что позволяет быстро собрать современный интерфейс без тяжёлого состояния. Основные модули:
-+
-+* `App.jsx` — каркас приложения, отвечает за глобальную тему и хранение токена авторизации.
-+* `pages/Dashboard.jsx` — главная страница с бизнес-логикой: загрузка статусов сервисов, устройств и метрик.
-+* `components/ServiceStatusGrid.jsx` — карточки доступности Auth/Discovery/Monitoring сервисов.
-+* `components/DeviceTable.jsx` — таблица устройств с формами добавления и запуском сканирования подсети.
-+* `components/MonitoringPanel.jsx` — графики загруженности устройства и список интерфейсов на основе данных Monitoring Service.
-+* `components/AuthPanel.jsx` — вкладки входа и регистрации, подключённые к Auth Service.
-+
-+HTTP-клиент (`src/api/client.js`) автоматически проксирует все запросы через `/api` API-шлюза и подставляет JWT из localStorage при наличии.
-+
-+Для разработки против удалённого шлюза можно задать `VITE_API_BASE_URL` (для production-сборки) и `VITE_API_GATEWAY_URL` (для proxy Vite dev-сервера).
-+
-+Запуск dev-сервера: `cd frontend && npm install && npm run dev` (Vite проксирует `/api` к локальному шлюзу). Сборка в докер-образ происходит через многостадийный Dockerfile, в результате статика попадает в Nginx и обслуживается в контейнере `frontend`.
-+
-+## Backend сервисы
-+
-+Каждый сервис — отдельное FastAPI-приложение.
-+
-+* Подключения к БД и миграция таблиц выполняются при старте (через SQLAlchemy `Base.metadata.create_all`).
-+* Для периодических задач используются Celery + Redis. Планировщики (beat) настроены в `app.main`.
-+* Пакет `auth-service/app/auth.py` содержит функции хэширования паролей и выпуска JWT.
-+* `monitoring-service/app/snmp_client.py` иллюстрирует работу с SNMP при помощи `pysnmp`.
-+
-+## Разработка
-+
-+* Запуск отдельно выбранного сервиса: `uvicorn app.main:app --reload --port 8000`.
-+* Для Celery-воркеров используйте: `celery -A app.main.celery_app worker --loglevel=info`.
-+* Фронтенд запускается командой `npm run dev` в каталоге `frontend` (не забудьте `npm install`). Для production-сборки достаточно `npm run build`,
-+  результат появится в `frontend/dist` и автоматически используется Dockerfile.
-+
-+## Что дальше
-+
-+* Подключить real SNMP OID’ы устройств и расширить список интерфейсов.
-+* Расширить React-приложение поддержкой дашбордов, ролей и realtime-обновлений по WebSocket.
-+* Добавить сервис уведомлений и ролевую модель управления пользователями.
-+
+Вот отформатированный и чистый текст для твоего `README.md` — можно вставлять прямо в GitHub:
+
+---
+
+# Network Monitoring Platform
+
+Веб-платформа для мониторинга локальной вычислительной сети предприятия, построенная по микросервисной архитектуре.
+Репозиторий содержит готовый скелет проекта, объединяющий независимые сервисы, API-шлюз и клиентскую веб-панель.
+Достаточно запустить `docker compose`, и все сервисы поднимутся вместе с базами данных и инструментами наблюдения.
+
+---
+
+## Архитектура
+
+```
+┌──────────┐     ┌────────────┐     ┌────────────────┐
+│ Frontend │◄───►│ API Gateway│───►│ Backend сервисы │
+└────┬─────┘     └────┬──────┘     └────┬────────────┘
+     │                │                │
+     │                │                │
+     │     ┌──────────▼──────────┐  ┌──▼──────────┐  ┌──────────────┐
+     │     │ Auth Service        │  │ Discovery   │  │ Monitoring    │
+     │     │ (FastAPI + Postgres)│  │ Service     │  │ Service       │
+     │     └─────────────────────┘  │ (FastAPI +  │  │ (FastAPI +    │
+     │                              │ PostgreSQL +│  │ PostgreSQL +  │
+     │                              │ Celery +    │  │ Celery +      │
+     │                              │ Redis)      │  │ Redis)        │
+     │                              └─────┬───────┘  └──────┬───────┘
+     │                                    │                │
+     │                              ┌─────▼────┐      ┌────▼────┐
+     │                              │ Redis    │      │ Prometheus │
+     │                              └──────────┘      │ Grafana    │
+     │                                                 └────────────┘
+```
+
+* **Frontend** — статическое SPA (React + Vite). Отправляет запросы к API-шлюзу, отображает список устройств, статусы и метрики.
+* **API Gateway** — Nginx, маршрутизирует `/api/auth`, `/api/discovery`, `/api/monitoring` и раздаёт фронтенд.
+* **Auth Service** — FastAPI + SQLAlchemy. Регистрация, авторизация и JWT-токены.
+* **Discovery Service** — FastAPI-сервис для инвентаризации сети, хранит устройства в PostgreSQL, фоновые задачи — Celery + Redis.
+* **Monitoring Service** — FastAPI-сервис для опроса устройств и сбора метрик (SNMP, Redis, PostgreSQL).
+* **Инфраструктура** — отдельные контейнеры PostgreSQL, Redis, Prometheus и Grafana.
+
+---
+
+## Структура репозитория
+
+```
+api-gateway/          # Конфигурация Nginx API-шлюза
+auth-service/         # Микросервис аутентификации (FastAPI)
+databases/            # SQL-скрипты инициализации БД
+frontend/             # Клиентское SPA (React + Vite) и конфиг Nginx
+monitoring-service/   # Метрики, SNMP, Celery-задачи
+discovery-service/    # Сервис обнаружения устройств
+prometheus/, grafana/ # Конфигурация Prometheus и Grafana
+redis/                # Конфигурация Redis
+```
+
+---
+
+## Быстрый старт
+
+1. Скопируйте пример окружения и при необходимости измените значения:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Запустите инфраструктуру:
+
+   ```bash
+   docker compose up -d
+   ```
+
+3. Фронтенд будет доступен по адресу [http://localhost:3000](http://localhost:3000),
+   API-шлюз — [http://localhost:80](http://localhost:80).
+
+> ⚠️ По умолчанию используется демонстрационный SNMP community `public`.
+> В production-окружении обязательно замените его в `.env`.
+
+---
+
+## Frontend
+
+Клиент реализован как одностраничное приложение на **React + Vite**.
+Используются **Material UI** и **Recharts**, что позволяет быстро собрать современный интерфейс.
+
+Основные компоненты:
+
+* `App.jsx` — каркас приложения, глобальная тема, хранение JWT.
+* `pages/Dashboard.jsx` — главная страница с логикой загрузки статусов и метрик.
+* `components/ServiceStatusGrid.jsx` — карточки статусов Auth/Discovery/Monitoring сервисов.
+* `components/DeviceTable.jsx` — таблица устройств, добавление и запуск сканирования подсети.
+* `components/MonitoringPanel.jsx` — графики и список интерфейсов.
+* `components/AuthPanel.jsx` — формы входа и регистрации.
+
+HTTP-клиент (`src/api/client.js`) автоматически проксирует запросы через `/api` и подставляет JWT из `localStorage`.
+
+Для локальной разработки можно задать:
+
+* `VITE_API_BASE_URL` — адрес API для production-сборки,
+* `VITE_API_GATEWAY_URL` — адрес шлюза для прокси dev-сервера Vite.
+
+**Запуск:**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Сборка production-версии выполняется через Dockerfile — результат помещается в Nginx контейнер.
+
+---
+
+## Backend сервисы
+
+Каждый backend-сервис — независимое **FastAPI-приложение**:
+
+* Подключается к своей PostgreSQL-базе, создаёт таблицы через SQLAlchemy.
+* Фоновые задачи — **Celery + Redis** (планировщики и воркеры).
+* `auth-service/app/auth.py` — функции хэширования паролей и генерации JWT.
+* `monitoring-service/app/snmp_client.py` — пример работы с SNMP через `pysnmp`.
+
+---
+
+## Разработка
+
+* Запуск отдельного сервиса:
+
+  ```bash
+  uvicorn app.main:app --reload --port 8000
+  ```
+
+* Запуск Celery-воркера:
+
+  ```bash
+  celery -A app.main.celery_app worker --loglevel=info
+  ```
+
+* Фронтенд dev-сервер:
+
+  ```bash
+  cd frontend
+  npm install
+  npm run dev
+  ```
+
+  Для production-сборки:
+
+  ```bash
+  npm run build
+  ```
+
+  Результат появится в `frontend/dist` и будет обслуживаться контейнером `frontend`.
+
+---
+
+## Что дальше
+
+* Подключить реальные SNMP-OID устройств и расширить список интерфейсов.
+* Добавить в React-приложение роли пользователей, дашборды и realtime-обновления (WebSocket).
+* Реализовать сервис уведомлений и централизованную модель прав доступа.
+
+---
+
+Хочешь, я добавлю в конец блок «Системные требования» (Docker ≥ 24, Node ≥ 18 и т.д.) — чтобы README выглядел полностью завершённым?
