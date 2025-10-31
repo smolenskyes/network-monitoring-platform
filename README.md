@@ -47,7 +47,6 @@ index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..4e8f8efa88ec6a9ae630ab68c4060000
 +discovery-service/     # Микросервис обнаружения устройств
 +prometheus/, grafana/  # Конфигурация инструментов мониторинга
 +redis/                 # Конфиг Redis сервера
-+start.sh               # Скрипт развёртывания docker-compose стека
 +```
 +
 +## Быстрый старт
@@ -58,7 +57,7 @@ index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..4e8f8efa88ec6a9ae630ab68c4060000
 +   ```
 +2. Запустите инфраструктуру:
 +   ```bash
-+   ./start.sh
++   docker compose up -d
 +   ```
 +3. Фронтенд доступен по адресу <http://localhost:3000>, API-шлюз — <http://localhost:80>.
 +
